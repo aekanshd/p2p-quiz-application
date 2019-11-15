@@ -47,19 +47,30 @@ def receive():
     while True:
         try:
             msg = client_socket.recv(BUFSIZ).decode("utf8")
-            takeAction(msg)
+            if msg == "{quit}":
+                client_socket.close()
+                top.quit()
+            else:
+                takeAction(msg)
         except OSError:  # Possibly client has left the chat.
             break
 
 
 def send(event=None):  # event is passed by binders.
     """Handles sending of messages."""
-    msg = my_msg.get()
-    my_msg.set("")  # Clears input field.
+    msg = quit.get()
+    quit.set("")  # Clears input field.
     client_socket.send(bytes(msg, "utf8"))
     if msg == "{quit}":
         client_socket.close()
         top.quit()
+
+
+def on_closing(event=None):
+    """This function is to be called when the window is closed."""
+    quit.set("{quit}")
+    send()
+
 
 def sendName():
     client_socket.send(bytes(name.get(), "utf8"))
@@ -85,6 +96,7 @@ infoMessage = tkinter.StringVar()
 infoMessage.set("Enter your name below to get started.")
 infoLabel = tkinter.Label(top, textvariable=infoMessage)
 infoLabel.grid(column=0, row=1)
+quit = tkinter.StringVar()
 question = tkinter.StringVar()
 choice1 = tkinter.StringVar()
 choice2 = tkinter.StringVar()
@@ -100,6 +112,7 @@ c2 = tkinter.Radiobutton(top, textvariable=choice2, variable=correct_option, val
 c3 = tkinter.Radiobutton(top, textvariable=choice3, variable=correct_option, value=3)
 c4 = tkinter.Radiobutton(top, textvariable=choice4, variable=correct_option, value=4)
 submit_button = tkinter.Button(top, text='Submit Answer', command=sendAnswer)
+top.protocol("WM_DELETE_WINDOW", on_closing)
 
 #----Now comes the sockets part----
 HOST = input('Enter host: ')

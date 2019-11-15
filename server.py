@@ -7,6 +7,7 @@ import json
 import tkinter as tk
 from tkinter import messagebox
 import threading
+import sys
 
 def buildInfo(msgKey, msgValue):
     msg = {
@@ -28,17 +29,19 @@ def on_closing():
     global clients
     global addresses
     for sock in clients:
+        sock.send(bytes("{quit}", "utf8"))
         sock.close()
     SERVER.close()
     clients = {}
     addresses = {}
+    sys.exit(0)
 
 class QuizMaster(threading.Thread):
 
     HOST = None
     PORT = None
     question = None
-    client_list = list()
+    client_list = dict()
     clients_string = None
 
     def __init__(self, HOST=None, PORT=None):
@@ -48,17 +51,23 @@ class QuizMaster(threading.Thread):
         self.start()
 
     def callback(self):
-        self.root.quit()
+        self.root.destroy()
+        print("Inside callback.")
         on_closing()
+        sys.exit(0)
 
-    def addClientToList(self, client_name):
-        self.client_list.append(client_name)
+    def addClientToList(self, client, client_name):
+        self.client_list[client] = client_name
+        self.buildClientList()
+
+    def removeClientFromList(self, client):
+        self.client_list.pop(client, None)
         self.buildClientList()
 
     def buildClientList(self):
         clients = ""
-        for client in self.client_list:
-            clients = clients + str(client) + ", "
+        for client, client_name in self.client_list.items():
+            clients = clients + str(client_name) + ", "
         self.clients_string.set(clients)
 
     def checkAnswer(self, answer):
@@ -185,6 +194,7 @@ def accept_incoming_connections():
         client.send(bytes(buildInfo("greeting", "Greetings player! Now type your name and press enter!"), "utf8"))
         addresses[client] = client_address
         Thread(target=handle_client, args=(client,)).start()
+        break
 
 
 def handle_client(client):  # Takes client socket as argument.
@@ -194,24 +204,28 @@ def handle_client(client):  # Takes client socket as argument.
     welcome = 'Welcome %s! If you ever want to quit, type {quit} to exit.' % name
     client.send(bytes(buildInfo("welcomeMsg", welcome), "utf8"))
     msg = "%s has joined the chat!" % name
-    quizMaster.addClientToList(name)
+    quizMaster.addClientToList(client,name)
     broadcast(bytes(buildInfo("joined", msg), "utf8"))
     clients[client] = name
 
     while True:
         msg = client.recv(BUFSIZ).decode("utf8")
-        msg = json.loads(msg)
-        if msg['type'] == "answer":
-            client.send(bytes(buildInfo("answer", str(quizMaster.checkAnswer(msg["answer"]))), "utf8"))
-
-        # if msg != bytes("{quit}", "utf8"):
-        #     broadcast(msg, name+": ")
-        # else:
-        #     client.send(bytes("{quit}", "utf8"))
-        #     client.close()
-        #     del clients[client]
-        #     broadcast(bytes(buildInfo("left","%s has left the chat." % name), "utf8"))
-        #     break
+        print(msg)
+        if msg != "{quit}":
+            try:
+                msg = json.loads(msg)
+                if msg['type'] == "answer":
+                    client.send(bytes(buildInfo("answer", str(quizMaster.checkAnswer(msg["answer"]))), "utf8"))
+            except Exception as e:
+                print("Incorrect Payload:", msg)
+                on_closing()
+                break
+        else:
+            client.send(bytes("{quit}", "utf8"))
+            client.close()
+            quizMaster.removeClientFromList(client)
+            del clients[client]
+            break
 
 
 clients = {}
