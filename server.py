@@ -28,10 +28,12 @@ def broadcast(msg, prefix=""):  # prefix is for name identification.
 def on_closing():
     global clients
     global addresses
+    global HOST_CLOSED
     for sock in clients:
         sock.send(bytes("{quit}", "utf8"))
         sock.close()
     SERVER.close()
+    HOST_CLOSED = True
     clients = {}
     addresses = {}
     sys.exit(0)
@@ -194,7 +196,8 @@ def accept_incoming_connections():
         client.send(bytes(buildInfo("greeting", "Greetings player! Now type your name and press enter!"), "utf8"))
         addresses[client] = client_address
         Thread(target=handle_client, args=(client,)).start()
-        break
+        if HOST_CLOSED:
+            break
 
 
 def handle_client(client):  # Takes client socket as argument.
@@ -233,7 +236,7 @@ addresses = {}
 
 import socket as sock
 HOST = sock.gethostname() if sock.gethostname().find('.')>=0 else sock.gethostbyaddr(sock.gethostname())[0]
-
+HOST_CLOSED = False
 PORT = 33000
 BUFSIZ = 1024
 ADDR = (HOST, PORT)
